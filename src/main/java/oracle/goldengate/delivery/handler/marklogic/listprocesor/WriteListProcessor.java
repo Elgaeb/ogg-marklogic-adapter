@@ -189,6 +189,7 @@ public class WriteListProcessor implements ListProcessor<WriteListItem> {
 
         envelope.put("instance", instance);
         envelope.put("headers", getHeaders(item));
+        envelope.put("attachments", item.getAttachments());
 
         return envelope;
     }

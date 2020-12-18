@@ -114,64 +114,72 @@ public class WriteListItemFactory {
             isKeyUpdate = ! (id.isPresent() && previousId.isPresent() && (id.get() == previousId.get()));
         }
 
+        WriteListItem item = new WriteListItem();
+
         final PendingItems pendingItems = new PendingItems();
         final Collection<String> collections = makeCollections(markLogicOp.getSchema(), markLogicOp.getTable(), handlerProperties);
         Map<String, Object> doc = new HashMap<>();
-        markLogicOp.getAfterValues().ifPresentOrElse(after -> {
-            after.entrySet().forEach(afterEntry -> {
-                String columnName = afterEntry.getKey();
-                Object columnValue = afterEntry.getValue();
-                if(markLogicOp.isBinary(columnName)) {
-                    if (columnValue != null) {
-                        Pair<Optional<String>, Optional<String>> binaryUris = getUris(markLogicOp, ids, handlerProperties, columnName);
 
-                        byte blob[] = (byte[]) columnValue;
+        if(markLogicOp.getAfterValues().isPresent()) {
+            markLogicOp.getAfterValues().ifPresent(after -> {
+                after.entrySet().forEach(afterEntry -> {
+                    String columnName = afterEntry.getKey();
+                    Object columnValue = afterEntry.getValue();
+                    if(markLogicOp.isBinary(columnName)) {
+                        if (columnValue != null) {
+                            Pair<Optional<String>, Optional<String>> binaryUris = getUris(markLogicOp, ids, handlerProperties, columnName);
 
-                        String binaryExtension = Optional.ofNullable(handlerProperties.getImageFormat()).map(fmt -> "." + fmt).orElse("");
+                            byte blob[] = (byte[]) columnValue;
 
-                        WriteListItem binary = new WriteListItem();
-                        if (uriChanged) {
-                            binaryUris.getLeft().map(uri -> uri + binaryExtension).ifPresent(binary::setOldUri);
+                            String binaryExtension = Optional.ofNullable(handlerProperties.getImageFormat()).map(fmt -> "." + fmt).orElse("");
+
+                            WriteListItem binary = new WriteListItem();
+                            if (uriChanged) {
+                                binaryUris.getLeft().map(uri -> uri + binaryExtension).ifPresent(binary::setOldUri);
+                            }
+                            binaryUris.getRight().map(uri -> uri + binaryExtension).ifPresent(binary::setUri);
+
+                            binary.setMap(null);
+                            binary.setBinary(blob);
+                            binary.setOperation(WriteListItem.INSERT);
+                            binary.setCollection(makeBinaryCollections(collections, handlerProperties));
+                            binary.setSourceSchema(markLogicOp.getSchema().toUpperCase());
+                            binary.setSourceTable(markLogicOp.getTable().toUpperCase());
+                            binary.setScn(op.getCsnStr());
+                            binary.setTimestamp(op.getOperationTimestamp());
+                            pendingItems.getBinaryItems().add(binary);
+                            doc.put(columnName + "Uri", binary.getUri());
+
+                            item.addAttachment(binary.getUri());
+                        } else {
+                            doc.put(columnName + "Uri", null);
                         }
-                        binaryUris.getRight().map(uri -> uri + binaryExtension).ifPresent(binary::setUri);
-
-                        binary.setMap(null);
-                        binary.setBinary(blob);
-                        binary.setOperation(WriteListItem.INSERT);
-                        binary.setCollection(makeBinaryCollections(collections, handlerProperties));
-                        binary.setSourceSchema(markLogicOp.getSchema().toUpperCase());
-                        binary.setSourceTable(markLogicOp.getTable().toUpperCase());
-                        binary.setScn(op.getCsnStr());
-                        binary.setTimestamp(op.getOperationTimestamp());
-                        pendingItems.getBinaryItems().add(binary);
-                        doc.put(columnName + "Uri", binary.getUri());
                     } else {
-                        doc.put(columnName + "Uri", null);
+                        doc.put(columnName, columnValue);
                     }
-                } else {
-                    doc.put(columnName, columnValue);
-                }
+                });
             });
-        }, () -> markLogicOp.getBeforeValues().ifPresent(before -> {
-            before.entrySet().forEach(beforeEntry -> {
-                String columnName = beforeEntry.getKey();
-                Object columnValue = beforeEntry.getValue();
-                if(markLogicOp.isBinary(columnName)) {
-                    if (columnValue != null) {
-                        Pair<Optional<String>, Optional<String>> binaryUris = getUris(markLogicOp, ids, handlerProperties, columnName);
-                        String binaryExtension = Optional.ofNullable(handlerProperties.getImageFormat()).map(fmt -> "." + fmt).orElse("");
-                        String uri = binaryUris.getLeft().map(binaryUri -> binaryUri + binaryExtension).orElse(null);
-                        doc.put(columnName + "Uri", uri);
+        } else {
+            markLogicOp.getBeforeValues().ifPresent(before -> {
+                before.entrySet().forEach(beforeEntry -> {
+                    String columnName = beforeEntry.getKey();
+                    Object columnValue = beforeEntry.getValue();
+                    if(markLogicOp.isBinary(columnName)) {
+                        if (columnValue != null) {
+                            Pair<Optional<String>, Optional<String>> binaryUris = getUris(markLogicOp, ids, handlerProperties, columnName);
+                            String binaryExtension = Optional.ofNullable(handlerProperties.getImageFormat()).map(fmt -> "." + fmt).orElse("");
+                            String uri = binaryUris.getLeft().map(binaryUri -> binaryUri + binaryExtension).orElse(null);
+                            doc.put(columnName + "Uri", uri);
+                        } else {
+                            doc.put(columnName + "Uri", null);
+                        }
                     } else {
-                        doc.put(columnName + "Uri", null);
+                        doc.put(columnName, columnValue);
                     }
-                } else {
-                    doc.put(columnName, columnValue);
-                }
+                });
             });
-        }));
+        }
 
-        WriteListItem item = new WriteListItem();
 
         if(operationType == WriteListItem.OperationType.DELETE) {
             beforeUri.map(uri -> uri + "." + handlerProperties.getFormat()).ifPresent(item::setUri);

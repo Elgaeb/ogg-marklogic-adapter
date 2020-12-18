@@ -53,22 +53,24 @@ exports.transform = function transform(context, params, content) {
 
     const baseDocument = getBaseDocument({ schema, table, uri });
 
-    const baseInstance = baseDocument.envelope.instance[schema][table];
+    const baseEnvelope = baseDocument.envelope;
+    const baseInstance = baseEnvelope.instance[schema][table];
     const baseHeaders = baseDocument.envelope.headers;
-    const instance = root.envelope.instance[schema][table];
+    const envelope = root.envelope;
+    const instance = envelope.instance[schema][table];
 
     baseHeaders.schema = schema;
     baseHeaders.table = table;
     baseHeaders.ingestedOn = fn.currentDateTime().toString();
 
     if(operation === "delete") {
-        return doDelete({ scn, operation, operationTimestamp, instance, baseHeaders, baseInstance, baseDocument });
+        return doDelete({ scn, operation, operationTimestamp, instance, envelope, baseHeaders, baseInstance, baseDocument, baseEnvelope });
     } else {
-        return doUpdate({ scn, operation, operationTimestamp, instance, baseHeaders, baseInstance, baseDocument });
+        return doUpdate({ scn, operation, operationTimestamp, instance, envelope, baseHeaders, baseInstance, baseDocument, baseEnvelope });
     }
 }
 
-function doDelete({ scn, operation, operationTimestamp, instance, baseHeaders, baseInstance, baseDocument }) {
+function doDelete({ scn, operation, operationTimestamp, instance, envelope, baseHeaders, baseInstance, baseDocument, baseEnvelope }) {
     return ifNewer({
         previous: baseHeaders.deletedAtScn,
         current: scn,

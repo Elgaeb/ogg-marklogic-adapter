@@ -2,10 +2,7 @@ package oracle.goldengate.delivery.handler.marklogic.models;
 
 import oracle.goldengate.util.DateString;
 
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.HashMap;
-import java.util.Map;
+import java.util.*;
 
 /**
  * Created by prawal on 1/23/17.
@@ -36,6 +33,7 @@ public class WriteListItem {
     private String sourceSchema;
     private String sourceTable;
     private DateString timestamp;
+    private Set<String> attachments = new TreeSet<>();
 
     private Map<String, Object> map = new HashMap<>();
     // allowed values UPDATE OR INSERT
@@ -130,5 +128,17 @@ public class WriteListItem {
 
     public void setTimestamp(DateString timestamp) {
         this.timestamp = timestamp;
+    }
+
+    public Set<String> getAttachments() {
+        return attachments;
+    }
+
+    public void setAttachments(Set<String> attachments) {
+        this.attachments = attachments;
+    }
+
+    public void addAttachment(String attachment) {
+        this.attachments.add(attachment);
     }
 }
