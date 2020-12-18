@@ -2,7 +2,7 @@ function newBaseDocument({ schema, table }) {
     const document = {
         envelope: {
             headers: {
-                columnUpdatedAt: {}
+                columnUpdatedAtScn: {}
             },
             triples: [],
             instance: {},
@@ -33,10 +33,10 @@ function highestScn(previous, current) {
 }
 
 function ifNewer({ previous, current, doIfNewer = () => null, doIfOlder = () => null }) {
-    if(previous == null || current == null || current >= previous) {
-        doIfNewer();
+    if(previous == null || current == null || current > previous) {
+        return doIfNewer(previous, current);
     } else {
-        doIfOlder();
+        return doIfOlder(previous, current);
     }
 }
 
@@ -59,7 +59,54 @@ exports.transform = function transform(context, params, content) {
 
     baseHeaders.schema = schema;
     baseHeaders.table = table;
+    baseHeaders.ingestedOn = fn.currentDateTime().toString();
 
+    if(operation === "delete") {
+        return doDelete({ scn, operation, operationTimestamp, instance, baseHeaders, baseInstance, baseDocument });
+    } else {
+        return doUpdate({ scn, operation, operationTimestamp, instance, baseHeaders, baseInstance, baseDocument });
+    }
+}
+
+function doDelete({ scn, operation, operationTimestamp, instance, baseHeaders, baseInstance, baseDocument }) {
+    return ifNewer({
+        previous: baseHeaders.deletedAtScn,
+        current: scn,
+        doIfNewer: (previousDeletedScn, currentDeletedScn) => {
+            baseHeaders.deletedAtScn = currentDeletedScn;
+
+            copyInstance({ scn, instance, baseInstance, baseHeaders });
+            Object.keys(baseHeaders.columnUpdatedAtScn).forEach(key => {
+                ifNewer({
+                    previous: baseHeaders.columnUpdatedAtScn[key],
+                    current: currentDeletedScn,
+                    doIfNewer: (columnScn, currentDeletedScn) => {
+                        baseHeaders.columnUpdatedAtScn[key] = currentDeletedScn;
+                        delete baseInstance[key];
+                    },
+                    doIfOlder: () => null
+                });
+            });
+
+            ifNewer({
+                previous: baseHeaders.scn,
+                current: scn,
+                doIfNewer: (previousScn, currentScn) => {
+                    baseHeaders.operation = operation;
+                    baseHeaders.scn = currentScn;
+                    baseHeaders.operationTimestamp = operationTimestamp;
+                    baseHeaders.deleted = true;
+                },
+                doIfOlder: (previousScn, currentScn) => null
+            })
+
+            return baseDocument;
+        },
+        doIfOlder: (previousDeletedScn, currentDeletedScn) => baseDocument
+    })
+}
+
+function doUpdate({ scn, operation, operationTimestamp, instance, baseHeaders, baseInstance, baseDocument }) {
     ifNewer({
         previous: baseHeaders.scn,
         current: scn,
@@ -70,52 +117,26 @@ exports.transform = function transform(context, params, content) {
         }
     })
 
-    Object.keys(instance).forEach(key => {
-        const value = instance[key];
-        const oldScn = baseHeaders.columnUpdatedAt[key];
-        if(scn == null || oldScn == null || oldScn < scn) {
-            baseHeaders.columnUpdatedAt[key] = scn;
-            baseInstance[key] = value;
+    // only update values if the document hasn't beedn deleted in the future.
+    ifNewer({
+        previous: baseHeaders.deletedAtScn,
+        current: scn,
+        doIfNewer: () => {
+            copyInstance({ scn, instance, baseInstance, baseHeaders });
+            baseHeaders.deleted = false;
         }
     });
 
-    baseHeaders.ingestedOn = fn.currentDateTime().toString();
     return baseDocument;
 }
 
-/*
-exports.transform = function transform(context, params, content) {
-    const root = content.toObject();
-    if(root == null) {
-        // binary file
-        return content;
-    }
-
-    const uri = context.uri;
-
-    const headers = root.envelope.headers;
-    const operation = headers.operation;
-
-    const schemaName = headers.sourceSchemaName;
-    const tableName = headers.sourceTableName;
-
-    const baseDocument = (operation === "insert") ?
-        newBaseDocument({ schemaName, tableName }) :
-        getBaseDocument({ schemaName, tableName, uri: (headers.previousUri || uri) });
-    baseDocument.envelope.headers.operations = [ headers, ...baseDocument.envelope.headers.operations ];
-
-    const baseInstance = baseDocument.envelope.instance[headers.sourceSchemaName][headers.sourceTableName];
-    const instance = root.envelope.instance[headers.sourceSchemaName][headers.sourceTableName];
-
+function copyInstance({ scn, instance, baseInstance, baseHeaders }) {
     Object.keys(instance).forEach(key => {
         const value = instance[key];
-        if(value === null) {
-            delete baseInstance[key];
-        } else {
+        const oldScn = baseHeaders.columnUpdatedAtScn[key];
+        if(scn == null || oldScn == null || oldScn < scn) {
+            baseHeaders.columnUpdatedAtScn[key] = scn;
             baseInstance[key] = value;
         }
     });
-
-    return baseDocument;
-};
-*/
+}

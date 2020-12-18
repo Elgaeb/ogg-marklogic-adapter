@@ -117,7 +117,7 @@ public class WriteListItemFactory {
         final PendingItems pendingItems = new PendingItems();
         final Collection<String> collections = makeCollections(markLogicOp.getSchema(), markLogicOp.getTable(), handlerProperties);
         Map<String, Object> doc = new HashMap<>();
-        markLogicOp.getAfterValues().ifPresent(after -> {
+        markLogicOp.getAfterValues().ifPresentOrElse(after -> {
             after.entrySet().forEach(afterEntry -> {
                 String columnName = afterEntry.getKey();
                 Object columnValue = afterEntry.getValue();
@@ -152,13 +152,34 @@ public class WriteListItemFactory {
                     doc.put(columnName, columnValue);
                 }
             });
-        });
+        }, () -> markLogicOp.getBeforeValues().ifPresent(before -> {
+            before.entrySet().forEach(beforeEntry -> {
+                String columnName = beforeEntry.getKey();
+                Object columnValue = beforeEntry.getValue();
+                if(markLogicOp.isBinary(columnName)) {
+                    if (columnValue != null) {
+                        Pair<Optional<String>, Optional<String>> binaryUris = getUris(markLogicOp, ids, handlerProperties, columnName);
+                        String binaryExtension = Optional.ofNullable(handlerProperties.getImageFormat()).map(fmt -> "." + fmt).orElse("");
+                        String uri = binaryUris.getLeft().map(binaryUri -> binaryUri + binaryExtension).orElse(null);
+                        doc.put(columnName + "Uri", uri);
+                    } else {
+                        doc.put(columnName + "Uri", null);
+                    }
+                } else {
+                    doc.put(columnName, columnValue);
+                }
+            });
+        }));
 
         WriteListItem item = new WriteListItem();
 
-        afterUri.map(uri -> uri + "." + handlerProperties.getFormat()).ifPresent(item::setUri);
-        if(uriChanged) {
-            beforeUri.map(uri -> uri + "." + handlerProperties.getFormat()).ifPresent(item::setOldUri);
+        if(operationType == WriteListItem.OperationType.DELETE) {
+            beforeUri.map(uri -> uri + "." + handlerProperties.getFormat()).ifPresent(item::setUri);
+        } else {
+            afterUri.map(uri -> uri + "." + handlerProperties.getFormat()).ifPresent(item::setUri);
+            if(uriChanged) {
+                beforeUri.map(uri -> uri + "." + handlerProperties.getFormat()).ifPresent(item::setOldUri);
+            }
         }
 
         item.setMap(doc);

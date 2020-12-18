@@ -187,6 +187,16 @@ public class AbstractGGTest {
         return handlerProperties;
     }
 
+    protected Map<String, Object> getHeaders(Map<String, Object> document) {
+        Map<String, Object> envelope = (Map<String, Object>) document.get("envelope");
+        if(envelope == null) {
+            // this is probably an XML document
+            envelope = document;
+        }
+
+        return (Map<String, Object>) envelope.get("headers");
+    }
+
     protected Map<String, Object> getInstance(Map<String, Object> document, String schemaName, String tableName) {
         Map<String, Object> envelope = (Map<String, Object>) document.get("envelope");
         if(envelope == null) {
