@@ -19,8 +19,12 @@ public class UpdateOperationHandler extends OperationHandler {
     @Override
     public void process(TableMetaData tableMetaData, Op op) {
         PendingItems pendingItems = WriteListItemFactory.from(tableMetaData, op, false, WriteListItem.OperationType.UPDATE, handlerProperties);
-        handlerProperties.writeList.addAll(pendingItems.getItems());
-        handlerProperties.binaryWriteList.addAll(pendingItems.getBinaryItems());
-        handlerProperties.totalUpdates++;
+        synchronized (handlerProperties.writeList) {
+            handlerProperties.writeList.addAll(pendingItems.getItems());
+        }
+        synchronized(handlerProperties.binaryWriteList) {
+            handlerProperties.binaryWriteList.addAll(pendingItems.getBinaryItems());
+        }
+        handlerProperties.totalUpdates.incrementAndGet();
     }
 }

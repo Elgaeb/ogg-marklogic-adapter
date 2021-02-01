@@ -7,6 +7,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicLong;
 
 public class HandlerProperties {
 
@@ -45,13 +46,13 @@ public class HandlerProperties {
     private HashMap<String, String[]> imageKeyProps;
     private final String uriDelimiter = "/";
 
-    public Long totalInserts = 0L;
-    public Long totalBinaryInserts = 0L;
-    public Long totalUpdates = 0L;
-    public Long totalDeletes = 0L;
-    public Long totalTruncates = 0L;
-    public Long totalTxns = 0L;
-    public Long totalOperations = 0L;
+    public final AtomicLong totalInserts = new AtomicLong(0);
+    public final AtomicLong totalBinaryInserts = new AtomicLong(0);
+    public final AtomicLong totalUpdates = new AtomicLong(0);
+    public final AtomicLong totalDeletes = new AtomicLong(0);
+    public final AtomicLong totalTruncates = new AtomicLong(0);
+    public final AtomicLong totalTxns = new AtomicLong(0);
+    public final AtomicLong totalOperations = new AtomicLong(0);
 
     public List<WriteListItem> writeList = new ArrayList<>();
     public List<String> deleteList = new ArrayList<>();

@@ -13,7 +13,7 @@ public class TruncateOperationHandler extends OperationHandler {
     @Override
     public void process(TableMetaData tableMetaData, Op op) throws Exception {
         handlerProperties.truncateList.add(tableMetaData.getTableName().getShortName().toLowerCase());
-        handlerProperties.totalTruncates++;
+        handlerProperties.totalTruncates.incrementAndGet();
     }
 
 }

@@ -37,7 +37,7 @@ public class DeleteTest extends AbstractGGTest {
 
         Assert.assertEquals(instance.get("valPk"), PK_VALUE);
         Assert.assertEquals(headers.get("deleted"), false);
-        Assert.assertEquals(headers.get("scn"), 100);
+        Assert.assertEquals(headers.get("scn"), "100");
         Assert.assertEquals(instance.get("valOne"), "insertOne");
         Assert.assertEquals(instance.get("valTwo"), "insertTwo");
         Assert.assertEquals(instance.get("valThree"), "insertThree");
@@ -58,8 +58,8 @@ public class DeleteTest extends AbstractGGTest {
 
         Assert.assertEquals(headers.get("operation"), "delete");
         Assert.assertEquals(headers.get("deleted"), true);
-        Assert.assertEquals(headers.get("scn"), 150);
-        Assert.assertEquals(headers.get("deletedAtScn"), 150);
+        Assert.assertEquals(headers.get("scn"), "150");
+        Assert.assertEquals(headers.get("deletedAtScn"), "150");
         Assert.assertEquals(instance.get("valPk"), PK_VALUE);
         Assert.assertNull(instance.get("valOne"));
         Assert.assertNull(instance.get("valTwo"));
@@ -85,8 +85,8 @@ public class DeleteTest extends AbstractGGTest {
 
         Assert.assertEquals(headers.get("operation"), "delete");
         Assert.assertEquals(headers.get("deleted"), true);
-        Assert.assertEquals(headers.get("scn"), 150);
-        Assert.assertEquals(headers.get("deletedAtScn"), 150);
+        Assert.assertEquals(headers.get("scn"), "150");
+        Assert.assertEquals(headers.get("deletedAtScn"), "150");
         Assert.assertEquals(instance.get("valPk"), PK_VALUE);
         Assert.assertNull(instance.get("valOne"));
         Assert.assertNull(instance.get("valTwo"));
@@ -112,8 +112,8 @@ public class DeleteTest extends AbstractGGTest {
 
         Assert.assertEquals(headers.get("operation"), "insert");
         Assert.assertEquals(headers.get("deleted"), false);
-        Assert.assertEquals(headers.get("scn"), 200);
-        Assert.assertEquals(headers.get("deletedAtScn"), 150);
+        Assert.assertEquals(headers.get("scn"), "200");
+        Assert.assertEquals(headers.get("deletedAtScn"), "150");
         Assert.assertEquals(instance.get("valPk"), PK_VALUE);
         Assert.assertNull(instance.get("valOne"));
         Assert.assertEquals(instance.get("valTwo"), "200-2");
@@ -138,8 +138,8 @@ public class DeleteTest extends AbstractGGTest {
 
         Assert.assertEquals(headers.get("operation"), "insert");
         Assert.assertEquals(headers.get("deleted"), false);
-        Assert.assertEquals(headers.get("scn"), 200);
-        Assert.assertEquals(headers.get("deletedAtScn"), 150);
+        Assert.assertEquals(headers.get("scn"), "200");
+        Assert.assertEquals(headers.get("deletedAtScn"), "150");
         Assert.assertEquals(instance.get("valPk"), PK_VALUE);
         Assert.assertEquals(instance.get("valOne"), "160-1");
         Assert.assertEquals(instance.get("valTwo"), "200-2");
@@ -162,8 +162,8 @@ public class DeleteTest extends AbstractGGTest {
 
         Assert.assertEquals(headers.get("operation"), "insert"); // insert is still the latest operation
         Assert.assertEquals(headers.get("deleted"), false); // there was an insert in the future (scn 200)
-        Assert.assertEquals(headers.get("scn"), 200);
-        Assert.assertEquals(headers.get("deletedAtScn"), 170);
+        Assert.assertEquals(headers.get("scn"), "200");
+        Assert.assertEquals(headers.get("deletedAtScn"), "170");
         Assert.assertEquals(instance.get("valPk"), PK_VALUE);
         Assert.assertNull(instance.get("valOne"));
         Assert.assertEquals(instance.get("valTwo"), "200-2");

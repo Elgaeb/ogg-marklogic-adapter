@@ -17,9 +17,11 @@ public class DeleteOperationHandler extends OperationHandler {
     @Override
     public void process(TableMetaData tableMetaData, Op op) throws Exception {
         PendingItems pendingItems = WriteListItemFactory.from(tableMetaData, op, false, WriteListItem.OperationType.DELETE, handlerProperties);
-        handlerProperties.writeList.addAll(pendingItems.getItems());
+        synchronized(handlerProperties.writeList) {
+            handlerProperties.writeList.addAll(pendingItems.getItems());
+        }
 //        handlerProperties.deleteList.add(WriteListItemFactory.createUri(tableMetaData, op, true, handlerProperties));
-        handlerProperties.totalDeletes++;
+        handlerProperties.totalDeletes.incrementAndGet();
     }
 
 }

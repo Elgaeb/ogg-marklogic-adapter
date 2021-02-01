@@ -29,15 +29,20 @@ import org.apache.commons.lang.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.Closeable;
+import java.io.IOException;
 import java.time.OffsetDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
 
 /**
  * THIS CLASS IS NOT THREAD SAFE
  */
-public class WriteListProcessor implements ListProcessor<WriteListItem> {
+public class WriteListProcessor implements ListProcessor<WriteListItem>, Closeable {
     final private static Logger logger = LoggerFactory.getLogger(WriteListProcessor.class);
     private static final int MAX_RETRY_COUNT = 50;
 
@@ -60,6 +65,24 @@ public class WriteListProcessor implements ListProcessor<WriteListItem> {
         this.ticket = this.manager.startJob(this.writeBatcher);
     }
 
+    @Override
+    public void close() {
+        logger.debug("MarkLogic Handler - close - Closing WriteListProcessor");
+        if (this.manager != null) {
+            try {
+                if(this.writeBatcher != null) {
+                    this.writeBatcher.flushAndWait();
+                    this.processRetryList();
+                    if (!this.writeBatcher.isStopped()) {
+                        this.manager.stopJob(this.writeBatcher);
+                    }
+                }
+            } finally {
+                this.manager.release();
+            }
+        }
+    }
+
     protected DataMovementManager newDataMovementManager(HandlerProperties handlerProperties) {
         DatabaseClient client = handlerProperties.getClient();
         return client.newDataMovementManager();
@@ -69,7 +92,7 @@ public class WriteListProcessor implements ListProcessor<WriteListItem> {
         ServerTransform transform = new ServerTransform(handlerProperties.getTransformName());
 
         Map<String, String> params = handlerProperties.getTransformParams();
-        if(params != null) {
+        if (params != null) {
             params.keySet().forEach(paramName -> transform.addParameter(paramName, params.get(paramName)));
         }
 
@@ -81,26 +104,26 @@ public class WriteListProcessor implements ListProcessor<WriteListItem> {
             .withBatchSize(handlerProperties.getBatchSize())
             .withThreadCount(handlerProperties.getThreadCount())
             .onBatchFailure((batch, failure) -> {
-            	
-            	//log failure and check for null batch and items
-            	//Is this also called if HostAvailabilityListener is called?
-            	logger.debug("MarkLogic Handler - onBatchFailure exception", failure);
-            	if(batch == null) {
-            		logger.debug("MarkLogic Handler - onBatchFailure - batch is null");
-            		return;
-            	} else if (batch.getItems() == null) {
-            		logger.debug("MarkLogic Handler - onBatchFailure - batch.getItems is null");
-            		return;
-            	}
-            	
+
+                //log failure and check for null batch and items
+                //Is this also called if HostAvailabilityListener is called?
+                logger.debug("MarkLogic Handler - onBatchFailure exception", failure);
+                if (batch == null) {
+                    logger.debug("MarkLogic Handler - onBatchFailure - batch is null");
+                    return;
+                } else if (batch.getItems() == null) {
+                    logger.debug("MarkLogic Handler - onBatchFailure - batch.getItems is null");
+                    return;
+                }
+
                 Arrays.stream(batch.getItems()).forEach(writeEvent -> {
                     String uri = writeEvent.getTargetUri();
                     DocumentMetadataWriteHandle metadataWriteHandle = writeEvent.getMetadata();
-                    if(metadataWriteHandle instanceof GGDocumentMetadataHandle) {
+                    if (metadataWriteHandle instanceof GGDocumentMetadataHandle) {
                         GGDocumentMetadataHandle ggDocumentMetadataHandle = (GGDocumentMetadataHandle) metadataWriteHandle;
-                        if(ggDocumentMetadataHandle.getRetryCount() < MAX_RETRY_COUNT) {
+                        if (ggDocumentMetadataHandle.getRetryCount() < MAX_RETRY_COUNT) {
                             ggDocumentMetadataHandle.incrementRetryCount();
-                            synchronized(this.retryList) {
+                            synchronized (this.retryList) {
                                 retryList.add(new WriteListItemHolder(uri, ggDocumentMetadataHandle, writeEvent.getContent()));
                             }
                         } else {
@@ -121,9 +144,9 @@ public class WriteListProcessor implements ListProcessor<WriteListItem> {
     private ObjectWriter newObjectWriter(HandlerProperties handlerProperties) {
         ObjectMapper mapper = "xml".equals(handlerProperties.getFormat()) ? new XmlMapper() : new JsonMapper();
         mapper = mapper
-                .configure(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS, false)
-                .setDateFormat(new StdDateFormat().withColonInTimeZone(true))
-                .registerModule(new JavaTimeModule());
+            .configure(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS, false)
+            .setDateFormat(new StdDateFormat().withColonInTimeZone(true))
+            .registerModule(new JavaTimeModule());
 
         ObjectWriter writer = mapper.writer().with(JsonGenerator.Feature.WRITE_BIGDECIMAL_AS_PLAIN);
         writer = writer.withRootName("envelope");
@@ -131,7 +154,7 @@ public class WriteListProcessor implements ListProcessor<WriteListItem> {
     }
 
     protected List<WriteListItemHolder> toHolderList(List<WriteListItem> writeListItems) {
-        if(writeListItems == null) {
+        if (writeListItems == null) {
             return Collections.emptyList();
         } else {
             List<WriteListItemHolder> itemsToProcess = new LinkedList<>();
@@ -139,7 +162,7 @@ public class WriteListProcessor implements ListProcessor<WriteListItem> {
                 try {
                     WriteListItemHolder holder = new WriteListItemHolder(item);
                     itemsToProcess.add(holder);
-                } catch(JsonProcessingException ex) {
+                } catch (JsonProcessingException ex) {
                     logger.error("There was an error converting " + item.getUri() + ", discarding.", ex);
                 }
             }
@@ -149,7 +172,7 @@ public class WriteListProcessor implements ListProcessor<WriteListItem> {
     }
 
     protected List<List<WriteListItemHolder>> toBatches(List<WriteListItemHolder> itemsToProcess) {
-        if(itemsToProcess.isEmpty() || itemsToProcess.isEmpty()) {
+        if (itemsToProcess.isEmpty() || itemsToProcess.isEmpty()) {
             return Collections.emptyList();
         } else {
             List<List<WriteListItemHolder>> batches = new LinkedList<>();
@@ -160,7 +183,7 @@ public class WriteListProcessor implements ListProcessor<WriteListItem> {
             for (WriteListItemHolder holder : itemsToProcess) {
                 String uri = holder.getUri();
                 if (currentBatchUris.contains(uri)) {
-                	logger.debug("MarkLogic Handler - toBatches - Found duplicate URI, splitting batch. URI=" + uri);
+                    logger.debug("MarkLogic Handler - toBatches - Found duplicate URI, splitting batch. URI=" + uri);
                     currentBatch = new LinkedList<>();
                     batches.add(currentBatch);
                     currentBatchUris.clear();
@@ -173,16 +196,20 @@ public class WriteListProcessor implements ListProcessor<WriteListItem> {
         }
     }
 
-    protected void processBatch(List<WriteListItemHolder> batch) {    	
-    	for (WriteListItemHolder holder : batch) {
+    protected void processBatch(List<WriteListItemHolder> batch) {
+        for (WriteListItemHolder holder : batch) {
             this.writeBatcher.add(holder.getUri(), holder.getMetadataHandle(), holder.getWriteHandle());
         }
         this.flushAndWait();
 
-        synchronized(this.retryList) {
+        this.processRetryList();
+    }
+
+    protected void processRetryList() {
+        synchronized (this.retryList) {
             while (!retryList.isEmpty()) {
-            	logger.debug("MarkLogic Handler - processing retryList");
-            	logger.debug("MarkLogic Handler - retryList size: " + retryList.size());
+                logger.debug("MarkLogic Handler - processing retryList");
+                logger.debug("MarkLogic Handler - retryList size: " + retryList.size());
                 List<WriteListItemHolder> itemsToRetry = Collections.unmodifiableList(this.retryList);
                 this.retryList.clear(); //replace code that reallocated a new list.
                 for (WriteListItemHolder holder : itemsToRetry) {
@@ -225,7 +252,7 @@ public class WriteListProcessor implements ListProcessor<WriteListItem> {
         if (previousUri != null) {
             headers.put("previousUri", previousUri);
         }
-        
+
         return headers;
     }
 
@@ -260,7 +287,7 @@ public class WriteListProcessor implements ListProcessor<WriteListItem> {
 
             this.metadataHandle = metadataHandle;
             this.writeHandle = handle;
-            this.uri =  item.getUri();
+            this.uri = item.getUri();
         }
 
         public String getUri() {

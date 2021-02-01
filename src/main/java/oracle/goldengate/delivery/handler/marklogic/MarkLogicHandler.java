@@ -10,12 +10,16 @@ import oracle.goldengate.delivery.handler.marklogic.listprocesor.BinaryWriteList
 import oracle.goldengate.delivery.handler.marklogic.listprocesor.DeleteListProcessor;
 import oracle.goldengate.delivery.handler.marklogic.listprocesor.TruncateListProcessor;
 import oracle.goldengate.delivery.handler.marklogic.listprocesor.WriteListProcessor;
+import oracle.goldengate.delivery.handler.marklogic.models.WriteListItem;
 import oracle.goldengate.delivery.handler.marklogic.operations.OperationHandler;
 import oracle.goldengate.delivery.handler.marklogic.util.DBOperationFactory;
 import oracle.goldengate.util.ConfigException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 public class MarkLogicHandler extends AbstractHandler {
@@ -69,7 +73,7 @@ public class MarkLogicHandler extends AbstractHandler {
                 operationHandler.process(tableMetaData, op);
 
                 /** Increment the total number of operations */
-                handlerProperties.totalOperations++;
+                handlerProperties.totalOperations.incrementAndGet();
             } catch (Throwable throwable) {
                 status = Status.ABEND;
                 logger.error("Unable to process operation.", throwable);
@@ -87,11 +91,19 @@ public class MarkLogicHandler extends AbstractHandler {
     }
 
     protected void commitWriteList() {
-    	logger.debug("MarkLogic Handler - commitWriteList");
+        logger.debug("MarkLogic Handler - commitWriteList");
+
+        List<WriteListItem> writeList;
+        synchronized(handlerProperties.writeList) {
+            logger.debug("MarkLogic Handler - snapshotting and clearing writeList - size = {}", handlerProperties.writeList.size());
+            writeList = new ArrayList<>(handlerProperties.writeList);
+            handlerProperties.writeList.clear();
+        }
+
         boolean done = false;
         while(!done) {
-            try {
-                new WriteListProcessor(handlerProperties).process(handlerProperties.writeList);
+            try(WriteListProcessor writeListProcessor = new WriteListProcessor(handlerProperties)) {
+                writeListProcessor.process(writeList);
                 done = true;
             } catch(MarkLogicIOException ex) {
                 logger.warn("There was an error communicating with the MarkLogic server. Waiting for 45 seconds to retry...");
@@ -102,15 +114,22 @@ public class MarkLogicHandler extends AbstractHandler {
                 }
             }
         }
-        logger.debug("MarkLogic Handler - clearing writeList - size = " + handlerProperties.writeList.size());
-        handlerProperties.writeList.clear();
     }
 
     protected void commitBinaryWriteList() {
+        logger.debug("MarkLogic Handler - commitBinaryWriteList");
+
+        List<WriteListItem> binaryWriteList;
+        synchronized(handlerProperties.binaryWriteList) {
+            logger.debug("MarkLogic Handler - snapshotting and clearing binaryWriteList - size = {}", handlerProperties.binaryWriteList.size());
+            binaryWriteList = new ArrayList<>(handlerProperties.binaryWriteList);
+            handlerProperties.binaryWriteList.clear();
+        }
+
         boolean done = false;
         while(!done) {
-            try {
-                new BinaryWriteListProcessor(handlerProperties).process(handlerProperties.binaryWriteList);
+            try(BinaryWriteListProcessor binaryWriteListProcessor = new BinaryWriteListProcessor(handlerProperties)) {
+                binaryWriteListProcessor.process(binaryWriteList);
                 done = true;
             } catch(MarkLogicIOException ex) {
                 logger.warn("There was an error communicating with the MarkLogic server. Waiting for 45 seconds to retry...");
@@ -121,7 +140,6 @@ public class MarkLogicHandler extends AbstractHandler {
                 }
             }
         }
-        handlerProperties.binaryWriteList.clear();
     }
 
     protected void commitDeleteList() {
@@ -164,11 +182,11 @@ public class MarkLogicHandler extends AbstractHandler {
 
         /**TODO: Add steps for rollback */
 
-        handlerProperties.totalTxns++;
+        handlerProperties.totalTxns.incrementAndGet();
 
         return status;
     }
-    
+
     @Override
     public Status transactionRollback(DsEvent e, DsTransaction tx) {
     	logger.debug("MarkLogic Handler: transactionRollback. Sequence No (RBA Concated): " + e.getCheckpoint().toString() + "\n");
@@ -193,9 +211,11 @@ public class MarkLogicHandler extends AbstractHandler {
     @Override
     public void destroy() {
     	logger.debug("MarkLogic Handler - destroy");
-    	logger.debug("MarkLogic Handler - WriteList size " + handlerProperties.writeList.size());
+    	synchronized(handlerProperties.writeList) {
+            logger.debug("MarkLogic Handler - WriteList size {}", handlerProperties.writeList.size());
+        }
         handlerProperties.getClient().release();
-        
+
         super.destroy();
     }
 

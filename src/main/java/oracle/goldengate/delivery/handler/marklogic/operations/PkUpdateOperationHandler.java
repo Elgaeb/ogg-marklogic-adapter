@@ -32,10 +32,14 @@ public class PkUpdateOperationHandler extends OperationHandler {
     public void process(TableMetaData tableMetaData, Op op) throws Exception {
         PendingItems pendingItems = WriteListItemFactory.from(tableMetaData, op, false, WriteListItem.OperationType.PK_UPDATE, handlerProperties);
 
-        processItems(Collections.unmodifiableList(pendingItems.getItems()), handlerProperties.writeList, handlerProperties.deleteList);
-        processItems(Collections.unmodifiableList(pendingItems.getBinaryItems()), handlerProperties.binaryWriteList, handlerProperties.binaryDeleteList);
+        synchronized(handlerProperties.writeList) {
+            processItems(Collections.unmodifiableList(pendingItems.getItems()), handlerProperties.writeList, handlerProperties.deleteList);
+        }
 
-        handlerProperties.totalUpdates++;
+        synchronized(handlerProperties.binaryWriteList) {
+            processItems(Collections.unmodifiableList(pendingItems.getBinaryItems()), handlerProperties.binaryWriteList, handlerProperties.binaryDeleteList);
+        }
+        handlerProperties.totalUpdates.incrementAndGet();
     }
 
 }
