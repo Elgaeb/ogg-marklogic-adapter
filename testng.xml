@@ -3,7 +3,10 @@
 <suite name="MarkLogic Handler Test">
     <test name="Regression">
          <classes>
-             <class name="org.goldengate.delivery.handler.marklogic.MarkLogicHandlerTest"/>
+             <class name="org.goldengate.delivery.handler.marklogic.DeleteTest"/>
+             <class name="org.goldengate.delivery.handler.marklogic.JSONInsertTest"/>
+             <class name="org.goldengate.delivery.handler.marklogic.NullColumnTest"/>
+             <class name="org.goldengate.delivery.handler.marklogic.TimestampColumnTest"/>
           </classes>
      </test> <!-- Test -->
 </suite> <!-- Suite -->

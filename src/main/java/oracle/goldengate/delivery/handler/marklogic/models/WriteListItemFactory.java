@@ -8,11 +8,14 @@ import oracle.goldengate.datasource.meta.DsType;
 import oracle.goldengate.datasource.meta.TableMetaData;
 import oracle.goldengate.datasource.meta.TableName;
 import oracle.goldengate.delivery.handler.marklogic.HandlerProperties;
+import oracle.goldengate.delivery.handler.marklogic.MarkLogicHandler;
 import oracle.goldengate.delivery.handler.marklogic.util.DateStringUtil;
 import oracle.goldengate.delivery.handler.marklogic.util.HashUtil;
 import oracle.goldengate.delivery.handler.marklogic.util.JacksonUtil;
 import oracle.goldengate.delivery.handler.marklogic.util.Pair;
 import org.apache.commons.text.CaseUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -23,6 +26,9 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 public class WriteListItemFactory {
+	
+    final private static Logger logger = LoggerFactory.getLogger(WriteListItemFactory.class);
+
     protected static final char SQL_WORD_SEPARATORS[] = new char[]{'_'};
 
     protected static String sqlToCamelCase(String sqlName) {
@@ -196,6 +202,8 @@ public class WriteListItemFactory {
         item.setCollection(collections);
         item.setSourceSchema(markLogicOp.getSchema().toUpperCase());
         item.setSourceTable(markLogicOp.getTable().toUpperCase());
+        
+        logger.debug("MarkLogic Handler - op.getCsnStr() " + op.getCsnStr());
         item.setScn(op.getCsnStr());
         item.setTimestamp(op.getOperationTimestamp());
 

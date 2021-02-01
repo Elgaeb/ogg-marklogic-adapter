@@ -87,6 +87,7 @@ public class MarkLogicHandler extends AbstractHandler {
     }
 
     protected void commitWriteList() {
+    	logger.debug("MarkLogic Handler - commitWriteList");
         boolean done = false;
         while(!done) {
             try {
@@ -101,6 +102,7 @@ public class MarkLogicHandler extends AbstractHandler {
                 }
             }
         }
+        logger.debug("MarkLogic Handler - clearing writeList - size = " + handlerProperties.writeList.size());
         handlerProperties.writeList.clear();
     }
 
@@ -151,6 +153,7 @@ public class MarkLogicHandler extends AbstractHandler {
 
     @Override
     public Status transactionCommit(DsEvent e, DsTransaction tx) {
+    	logger.debug("MarkLogic Handler - transactionCommit");
         Status status = super.transactionCommit(e, tx);
 
         commitWriteList();
@@ -164,6 +167,13 @@ public class MarkLogicHandler extends AbstractHandler {
         handlerProperties.totalTxns++;
 
         return status;
+    }
+    
+    @Override
+    public Status transactionRollback(DsEvent e, DsTransaction tx) {
+    	logger.debug("MarkLogic Handler: transactionRollback. Sequence No (RBA Concated): " + e.getCheckpoint().toString() + "\n");
+    	Status status = super.transactionRollback(e, tx);
+		return status;
     }
 
     @Override
@@ -182,7 +192,10 @@ public class MarkLogicHandler extends AbstractHandler {
 
     @Override
     public void destroy() {
+    	logger.debug("MarkLogic Handler - destroy");
+    	logger.debug("MarkLogic Handler - WriteList size " + handlerProperties.writeList.size());
         handlerProperties.getClient().release();
+        
         super.destroy();
     }
 

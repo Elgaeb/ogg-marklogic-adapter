@@ -23,6 +23,9 @@ import com.marklogic.client.io.marker.DocumentMetadataWriteHandle;
 import oracle.goldengate.delivery.handler.marklogic.HandlerProperties;
 import oracle.goldengate.delivery.handler.marklogic.models.WriteListItem;
 import oracle.goldengate.delivery.handler.marklogic.util.DateStringUtil;
+
+import org.apache.commons.lang.NumberUtils;
+import org.apache.commons.lang.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -78,6 +81,18 @@ public class WriteListProcessor implements ListProcessor<WriteListItem> {
             .withBatchSize(handlerProperties.getBatchSize())
             .withThreadCount(handlerProperties.getThreadCount())
             .onBatchFailure((batch, failure) -> {
+            	
+            	//log failure and check for null batch and items
+            	//Is this also called if HostAvailabilityListener is called?
+            	logger.debug("MarkLogic Handler - onBatchFailure exception", failure);
+            	if(batch == null) {
+            		logger.debug("MarkLogic Handler - onBatchFailure - batch is null");
+            		return;
+            	} else if (batch.getItems() == null) {
+            		logger.debug("MarkLogic Handler - onBatchFailure - batch.getItems is null");
+            		return;
+            	}
+            	
                 Arrays.stream(batch.getItems()).forEach(writeEvent -> {
                     String uri = writeEvent.getTargetUri();
                     DocumentMetadataWriteHandle metadataWriteHandle = writeEvent.getMetadata();
@@ -145,6 +160,7 @@ public class WriteListProcessor implements ListProcessor<WriteListItem> {
             for (WriteListItemHolder holder : itemsToProcess) {
                 String uri = holder.getUri();
                 if (currentBatchUris.contains(uri)) {
+                	logger.debug("MarkLogic Handler - toBatches - Found duplicate URI, splitting batch. URI=" + uri);
                     currentBatch = new LinkedList<>();
                     batches.add(currentBatch);
                     currentBatchUris.clear();
@@ -157,16 +173,18 @@ public class WriteListProcessor implements ListProcessor<WriteListItem> {
         }
     }
 
-    protected void processBatch(List<WriteListItemHolder> batch) {
-        for (WriteListItemHolder holder : batch) {
+    protected void processBatch(List<WriteListItemHolder> batch) {    	
+    	for (WriteListItemHolder holder : batch) {
             this.writeBatcher.add(holder.getUri(), holder.getMetadataHandle(), holder.getWriteHandle());
         }
         this.flushAndWait();
 
         synchronized(this.retryList) {
             while (!retryList.isEmpty()) {
+            	logger.debug("MarkLogic Handler - processing retryList");
+            	logger.debug("MarkLogic Handler - retryList size: " + retryList.size());
                 List<WriteListItemHolder> itemsToRetry = Collections.unmodifiableList(this.retryList);
-                this.retryList = new LinkedList<>();
+                this.retryList.clear(); //replace code that reallocated a new list.
                 for (WriteListItemHolder holder : itemsToRetry) {
                     this.writeBatcher.add(holder.getUri(), holder.getMetadataHandle(), holder.getWriteHandle());
                 }
@@ -202,12 +220,12 @@ public class WriteListProcessor implements ListProcessor<WriteListItem> {
         headers.put("table", item.getSourceTable());
         headers.put("operation", item.getOperation());
         headers.put("operationTimestamp", DateStringUtil.toISO(item.getTimestamp()));
-        Optional.ofNullable(item.getScn()).map(Long::parseLong).ifPresent(scn -> headers.put("scn", scn));
+        Optional.ofNullable(item.getScn()).ifPresent(scn -> headers.put("scn", scn));
         String previousUri = item.getOldUri();
         if (previousUri != null) {
             headers.put("previousUri", previousUri);
         }
-
+        
         return headers;
     }
 

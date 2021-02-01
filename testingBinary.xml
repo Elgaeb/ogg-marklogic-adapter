@@ -3,7 +3,7 @@
 <suite name="MarkLogic Binary Handler Test">
     <test name="Regression">
          <classes>
-             <class name="org.goldengate.delivery.handler.marklogic.MarkLogicBinaryHandlerTest"/>
+             <class name="org.goldengate.delivery.handler.marklogic.BinaryColumnTest"/>
           </classes>
      </test> <!-- Test -->
 </suite> <!-- Suite -->
